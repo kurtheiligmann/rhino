@@ -135,8 +135,10 @@ abstract class Icode {
 
        Icode_DEBUGGER                   = -64,
 
+       Icode_GENERATOR_RETURN           = -65,
+
        // Last icode
-        MIN_ICODE                       = -64;
+        MIN_ICODE                       = -65;
 
     static String bytecodeName(int bytecode)
     {
@@ -217,6 +219,7 @@ abstract class Icode {
           case Icode_GENERATOR:        return "GENERATOR";
           case Icode_GENERATOR_END:    return "GENERATOR_END";
           case Icode_DEBUGGER:         return "DEBUGGER";
+          case Icode_GENERATOR_RETURN: return "GENERATOR_RETURN";
         }
 
         // icode without name

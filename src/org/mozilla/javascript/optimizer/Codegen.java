@@ -1793,10 +1793,7 @@ class BodyCodegen
             cfw.markLabel(epilogueLabel);
         }
 
-        if (hasVarsInRegs) {
-            cfw.add(ByteCode.ARETURN);
-            return;
-        } else if (isGenerator) {
+        if (isGenerator) {
             if (((FunctionNode)scriptOrFn).getResumptionPoints() != null) {
                 cfw.markTableSwitchDefault(generatorSwitch);
             }
@@ -1804,17 +1801,22 @@ class BodyCodegen
             // change state for re-entry
             generateSetGeneratorResumptionPoint(GENERATOR_TERMINATE);
 
-            // throw StopIteration
+            // throw StopIteration. Needs scope as well as the generator state
             cfw.addALoad(variableObjectLocal);
+            cfw.addALoad(generatorStateLocal);
             addOptRuntimeInvoke("throwStopIteration",
-                    "(Ljava/lang/Object;)V");
+                    "(Ljava/lang/Object;Ljava/lang/Object;)V");
 
             Codegen.pushUndefined(cfw);
+            cfw.add(ByteCode.ARETURN);
+
+        } else if (hasVarsInRegs) {
             cfw.add(ByteCode.ARETURN);
 
         } else if (fnCurrent == null) {
             cfw.addALoad(popvLocal);
             cfw.add(ByteCode.ARETURN);
+
         } else {
             generateActivationExit();
             cfw.add(ByteCode.ARETURN);
@@ -1846,6 +1848,13 @@ class BodyCodegen
         cfw.addALoad(generatorStateLocal);
         addOptRuntimeInvoke("getGeneratorLocalsState",
                                 "(Ljava/lang/Object;)[Ljava/lang/Object;");
+    }
+
+    private void generateSetGeneratorReturnValue() {
+        cfw.addALoad(generatorStateLocal);
+        cfw.add(ByteCode.SWAP);
+        addOptRuntimeInvoke("setGeneratorReturnValue",
+                                "(Ljava/lang/Object;Ljava/lang/Object;)V");
     }
 
     private void generateActivationExit()
@@ -1967,16 +1976,19 @@ class BodyCodegen
 
               case Token.RETURN_RESULT:
               case Token.RETURN:
-                if (!isGenerator) {
-                    if (child != null) {
-                        generateExpression(child, node);
-                    } else if (type == Token.RETURN) {
-                        Codegen.pushUndefined(cfw);
-                    } else {
-                        if (popvLocal < 0) throw Codegen.badTree();
-                        cfw.addALoad(popvLocal);
-                    }
+                if (child != null) {
+                    generateExpression(child, node);
+                } else if (type == Token.RETURN) {
+                    Codegen.pushUndefined(cfw);
+                } else {
+                    if (popvLocal < 0) throw Codegen.badTree();
+                    cfw.addALoad(popvLocal);
                 }
+                if (isGenerator) {
+                    // Stash away the return value for use in the epilogue.
+                    generateSetGeneratorReturnValue();
+                }
+
                 if (compilerEnv.isGenerateObserverCount())
                     addInstructionCount();
                 if (epilogueLabel == -1) {
