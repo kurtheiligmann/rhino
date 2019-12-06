@@ -99,7 +99,6 @@ function TestGenerator(g, expected_values_for_next,
   testSend(g);
   testThrow(g);
 
-    /* TODO Rhino
   testNext(function*() { return yield* g(); });
   testSend(function*() { return yield* g(); });
   testThrow(function*() { return yield* g(); });
@@ -109,7 +108,6 @@ function TestGenerator(g, expected_values_for_next,
     testSend(g);
     testThrow(g);
   }
-  */
 }
 
 TestGenerator(function* g1() { },

@@ -2064,9 +2064,10 @@ class BodyCodegen
                     visitSetConstVar(child, child.getFirstChild(), false);
                 }
                 else if (child.getType() == Token.YIELD) {
-                    generateYieldPoint(child, false);
-                }
-                else {
+                    generateYieldPoint(child, false, false);
+                } else if (child.getType() == Token.YIELD_STAR) {
+                    generateYieldPoint(child, false, true);
+                } else {
                     generateExpression(child, node);
                     if (node.getIntProp(Node.ISNUMBER_PROP, -1) != -1)
                         cfw.add(ByteCode.POP2);
@@ -2819,7 +2820,10 @@ class BodyCodegen
                 break;
 
               case Token.YIELD:
-                generateYieldPoint(node, true);
+                generateYieldPoint(node, true, false);
+                break;
+              case Token.YIELD_STAR:
+                generateYieldPoint(node, true, true);
                 break;
 
               case Token.WITHEXPR: {
@@ -2846,7 +2850,7 @@ class BodyCodegen
 
     }
 
-    private void generateYieldPoint(Node node, boolean exprContext) {
+    private void generateYieldPoint(Node node, boolean exprContext, boolean yieldStar) {
         // save stack state
         int top = cfw.getStackTop();
         maxStack = maxStack > top ? maxStack : top;
@@ -2869,6 +2873,15 @@ class BodyCodegen
             generateExpression(child, node);
         else
             Codegen.pushUndefined(cfw);
+
+        if (yieldStar) {
+            // We will replace the result with one that signifies we should have a generator
+            cfw.add(ByteCode.NEW, "org/mozilla/javascript/ES6Generator$YieldStarResult");
+            cfw.add(ByteCode.DUP_X1);
+            cfw.add(ByteCode.SWAP);
+            cfw.addInvoke(ByteCode.INVOKESPECIAL, "org/mozilla/javascript/ES6Generator$YieldStarResult",
+                  "<init>", "(Ljava/lang/Object;)V");
+        }
 
         // change the resumption state
         int nextState = getNextGeneratorState(node);

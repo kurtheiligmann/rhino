@@ -136,9 +136,10 @@ abstract class Icode {
        Icode_DEBUGGER                   = -64,
 
        Icode_GENERATOR_RETURN           = -65,
+       Icode_YIELD_STAR                 = -66,
 
        // Last icode
-        MIN_ICODE                       = -65;
+        MIN_ICODE                       = -66;
 
     static String bytecodeName(int bytecode)
     {

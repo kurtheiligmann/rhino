@@ -555,6 +555,7 @@ public final class Interpreter extends Icode implements Evaluator
                 break;
               case Token.THROW :
               case Token.YIELD :
+              case Icode_YIELD_STAR :
               case Icode_GENERATOR :
               case Icode_GENERATOR_END :
               case Icode_GENERATOR_RETURN :
@@ -685,6 +686,7 @@ public final class Interpreter extends Icode implements Evaluator
         switch (bytecode) {
             case Token.THROW :
             case Token.YIELD:
+            case Icode_YIELD_STAR:
             case Icode_GENERATOR:
             case Icode_GENERATOR_END:
             case Icode_GENERATOR_RETURN:
@@ -1186,9 +1188,10 @@ switch (op) {
         // We are now resuming execution. Fall through to YIELD case.
     }
     // fall through...
-    case Token.YIELD: {
+    case Token.YIELD:
+    case Icode_YIELD_STAR: {
         if (!frame.frozen) {
-            return freezeGenerator(cx, frame, stackTop, generatorState);
+            return freezeGenerator(cx, frame, stackTop, generatorState, op == Icode_YIELD_STAR);
         }
         Object obj = thawGenerator(frame, stackTop, generatorState, op);
         if (obj != Scriptable.NOT_FOUND) {
@@ -2837,7 +2840,8 @@ switch (op) {
 
     private static Object freezeGenerator(Context cx, CallFrame frame,
                                           int stackTop,
-                                          GeneratorState generatorState)
+                                          GeneratorState generatorState,
+                                          boolean yieldStar)
     {
           if (generatorState.operation == NativeGenerator.GENERATOR_CLOSE) {
               // Error: no yields when generator is closing
@@ -2850,9 +2854,13 @@ switch (op) {
           frame.savedStackTop = stackTop;
           frame.pc--; // we want to come back here when we resume
           ScriptRuntime.exitActivationFunction(cx);
-          return (frame.result != DOUBLE_MARK)
+          final Object result = (frame.result != DOUBLE_MARK)
               ? frame.result
               : ScriptRuntime.wrapNumber(frame.resultDbl);
+          if (yieldStar) {
+              return new ES6Generator.YieldStarResult(result);
+          }
+          return result;
     }
 
     private static Object thawGenerator(CallFrame frame, int stackTop,
@@ -2874,8 +2882,9 @@ switch (op) {
           }
           if (generatorState.operation != NativeGenerator.GENERATOR_SEND)
               throw Kit.codeBug();
-          if (op == Token.YIELD)
+          if ((op == Token.YIELD) || (op == Icode_YIELD_STAR)) {
               frame.stack[stackTop] = generatorState.value;
+          }
           return Scriptable.NOT_FOUND;
     }
 

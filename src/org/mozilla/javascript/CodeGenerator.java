@@ -971,13 +971,18 @@ class CodeGenerator extends Icode {
             break;
 
           case Token.YIELD:
+          case Token.YIELD_STAR:
             if (child != null) {
                 visitExpression(child, 0);
             } else {
                 addIcode(Icode_UNDEF);
                 stackChange(1);
             }
-            addToken(Token.YIELD);
+            if (type == Token.YIELD) {
+                addToken(Token.YIELD);
+            } else {
+                addIcode(Icode_YIELD_STAR);
+            }
             addUint16(node.getLineno() & 0xFFFF);
             break;
 

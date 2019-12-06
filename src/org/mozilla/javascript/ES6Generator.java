@@ -6,6 +6,8 @@
 
 package org.mozilla.javascript;
 
+import java.util.ArrayDeque;
+
 public final class ES6Generator extends IdScriptableObject {
     private static final long serialVersionUID = 1645892441041347273L;
 
@@ -108,6 +110,23 @@ public final class ES6Generator extends IdScriptableObject {
 
     private Scriptable resume(Context cx, Scriptable scope, Object value)
     {
+        while (!delegees.isEmpty()) {
+            // We have used "yield *" previously to delegate to another generator
+            Scriptable delResult = delegees.peek().resume(cx, scope, value); 
+            if (ScriptRuntime.toBoolean(ScriptableObject.getProperty(delResult, ES6Iterator.DONE_PROPERTY))) {
+                // That one is done. Keep looping.
+                delegees.pop();
+            } else {
+                return delResult;
+            }
+        }
+
+        // If we get here then no delegees had a result or there were no delegees
+        return resumeLocal(cx, scope, value);
+    }
+
+    private Scriptable resumeLocal(Context cx, Scriptable scope, Object value)
+    {
         if (state == State.COMPLETED) {
             return ES6Iterator.makeIteratorResult(cx, scope, true);
         }
@@ -121,6 +140,18 @@ public final class ES6Generator extends IdScriptableObject {
         try {
             Object r = function.resumeGenerator(cx, scope,
                 NativeGenerator.GENERATOR_SEND, savedState, value);
+
+            if (r instanceof YieldStarResult) {
+                // This special result tells us that we are executing a "yield *"
+                final YieldStarResult ysResult = (YieldStarResult)r;
+                try {
+                    delegees.push((ES6Generator)(ysResult.getResult()));
+                    return resume(cx, scope, value);
+                } catch (ClassCastException cce) {
+                    throw ScriptRuntime.typeError0("msg.yield.star.not.generator");
+                }
+            }
+
             ScriptableObject.putProperty(result, ES6Iterator.VALUE_PROPERTY, r);
 
         } catch (NativeGenerator.GeneratorClosedException gce) {
@@ -225,6 +256,17 @@ public final class ES6Generator extends IdScriptableObject {
     private String lineSource;
     private int lineNumber;
     private State state = State.SUSPENDED_START;
+    private final ArrayDeque<ES6Generator> delegees = new ArrayDeque<>(0);
 
     enum State { SUSPENDED_START, SUSPENDED_YIELD, EXECUTING, COMPLETED };
+
+    public static final class YieldStarResult {
+        private Object result;
+
+        public YieldStarResult(Object result) {
+            this.result = result;
+        }
+
+        Object getResult() { return result; }
+    }
 }

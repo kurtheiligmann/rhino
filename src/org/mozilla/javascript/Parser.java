@@ -1925,11 +1925,19 @@ public class Parser
         consumeToken();
         int lineno = ts.lineno, pos = ts.tokenBeg, end = ts.tokenEnd;
 
+        boolean yieldStar = false;
+        if ((tt == Token.YIELD) &&
+            (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) &&
+            (peekToken() == Token.MUL)) {
+          yieldStar = true;
+          consumeToken();
+        }
+
         AstNode e = null;
         // This is ugly, but we don't want to require a semicolon.
         switch (peekTokenOrEOL()) {
           case Token.SEMI: case Token.RC:  case Token.RB:    case Token.RP:
-          case Token.EOF:  case Token.EOL: case Token.ERROR: case Token.YIELD:
+          case Token.EOF:  case Token.EOL: case Token.ERROR:
             break;
           default:
             e = expr();
@@ -1951,7 +1959,7 @@ public class Parser
             if (!insideFunction())
                 reportError("msg.bad.yield");
             endFlags |= Node.END_YIELDS;
-            ret = new Yield(pos, end - pos, e);
+            ret = new Yield(pos, end - pos, e, yieldStar);
             setRequiresActivation();
             setIsGenerator();
             if (!exprContext) {
