@@ -126,13 +126,12 @@ public abstract class ES6Iterator extends IdScriptableObject {
 
     // 25.1.1.3 The IteratorResult Interface
     static Scriptable makeIteratorResult(Context cx, Scriptable scope, boolean done) {
-        final Scriptable iteratorResult = cx.newObject(scope);
-        ScriptableObject.putProperty(iteratorResult, DONE_PROPERTY, done);
-        return iteratorResult;
+        return makeIteratorResult(cx, scope, done, Undefined.instance);
     }
 
     static Scriptable makeIteratorResult(Context cx, Scriptable scope, boolean done, Object value) {
-        final Scriptable iteratorResult = makeIteratorResult(cx, scope, done);
+        final Scriptable iteratorResult = cx.newObject(scope);
+        ScriptableObject.putProperty(iteratorResult, DONE_PROPERTY, done);
         ScriptableObject.putProperty(iteratorResult, VALUE_PROPERTY, value);
         return iteratorResult;
     }

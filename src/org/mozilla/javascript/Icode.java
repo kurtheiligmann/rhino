@@ -221,6 +221,7 @@ abstract class Icode {
           case Icode_GENERATOR_END:    return "GENERATOR_END";
           case Icode_DEBUGGER:         return "DEBUGGER";
           case Icode_GENERATOR_RETURN: return "GENERATOR_RETURN";
+          case Icode_YIELD_STAR:       return "YIELD_STAR";
         }
 
         // icode without name

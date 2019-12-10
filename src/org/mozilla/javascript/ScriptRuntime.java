@@ -2628,6 +2628,19 @@ public class ScriptRuntime {
     }
 
     /**
+     * Given an iterator result, return true if and only if there is a "done"
+     * property that's true.
+     */
+    public static boolean isIteratorDone(Context cx, Object result)
+    {
+        if (!(result instanceof Scriptable)) {
+            return false;
+        }
+        final Object prop = getObjectProp((Scriptable)result, "done", cx);
+        return toBoolean(prop);
+    }
+
+    /**
      * Perform function call in reference context. Should always
      * return value that can be passed to
      * {@link #refGet(Ref, Context)} or {@link #refSet(Ref, Object, Context)}
