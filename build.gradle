@@ -20,7 +20,7 @@ repositories {
 sourceSets {
     main {
         java {
-            srcDirs 'src', 'toolsrc', 'xmlimplsrc'
+            srcDirs 'src', 'xmlimplsrc'
         }
         resources {
             srcDirs 'src', 'toolsrc'
