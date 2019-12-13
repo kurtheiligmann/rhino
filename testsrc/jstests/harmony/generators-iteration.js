@@ -292,7 +292,6 @@ TestGenerator(
     "foo",
     [2, "1foo3", 5, "4foo6", undefined]);
 
-/* Rhino: Oh boy, look at this. */
 TestGenerator(
     function* g23() {
       return (yield (1 + (yield 2) + 3)) + (yield (4 + (yield 5) + 6));
@@ -300,10 +299,8 @@ TestGenerator(
     [2, NaN, 5, NaN, NaN],
     "foo",
     [2, "1foo3", 5, "4foo6", "foofoo"]);
-/* */
 
 // Rewind a try context with and without operands on the stack.
-/* Rhino: Work on this! */
 TestGenerator(
     function* g24() {
       try {
@@ -315,10 +312,8 @@ TestGenerator(
     [2, NaN, 5, NaN, NaN],
     "foo",
     [2, "1foo3", 5, "4foo6", "foofoo"]);
-/* */
 
 // Yielding in a catch context, with and without operands on the stack.
-/* Rhino: Work on this! */
 TestGenerator(
     function* g25() {
       try {
@@ -331,7 +326,6 @@ TestGenerator(
     [2, NaN, 5, NaN, NaN],
     "foo",
     [2, "1foo3", 5, "4foo6", "foofoo"]);
-/* */
 
 // Yield with no arguments yields undefined.
 TestGenerator(

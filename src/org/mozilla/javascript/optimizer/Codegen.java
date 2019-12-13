@@ -4,7 +4,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-
 package org.mozilla.javascript.optimizer;
 
 import static org.mozilla.classfile.ClassFileWriter.ACC_FINAL;
@@ -16,6 +15,7 @@ import static org.mozilla.classfile.ClassFileWriter.ACC_VOLATILE;
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
@@ -2063,10 +2063,8 @@ class BodyCodegen
                     load's & pop's */
                     visitSetConstVar(child, child.getFirstChild(), false);
                 }
-                else if (child.getType() == Token.YIELD) {
-                    generateYieldPoint(child, false, false);
-                } else if (child.getType() == Token.YIELD_STAR) {
-                    generateYieldPoint(child, false, true);
+                else if ((child.getType() == Token.YIELD) || (child.getType() == Token.YIELD_STAR)) {
+                    generateYieldPoint(child, false);
                 } else {
                     generateExpression(child, node);
                     if (node.getIntProp(Node.ISNUMBER_PROP, -1) != -1)
@@ -2820,10 +2818,8 @@ class BodyCodegen
                 break;
 
               case Token.YIELD:
-                generateYieldPoint(node, true, false);
-                break;
               case Token.YIELD_STAR:
-                generateYieldPoint(node, true, true);
+                generateYieldPoint(node, true);
                 break;
 
               case Token.WITHEXPR: {
@@ -2850,11 +2846,75 @@ class BodyCodegen
 
     }
 
-    private void generateYieldPoint(Node node, boolean exprContext, boolean yieldStar) {
-        // save stack state
-        int top = cfw.getStackTop();
+    // Descend down the tree and return the first child that represents a yield
+    // point, or null.
+    private Node findNestedYield(Node node) {
+        Node child = node.getFirstChild();
+        while (child != null) {
+            if ((child.getType() == Token.YIELD) || (child.getType() == Token.YIELD_STAR)) {
+                return child;
+            }
+            Node grandchild = findNestedYield(child);
+            if (grandchild != null) {
+                return grandchild;
+            }
+            child = child.getNext();
+        }
+        return null;
+    }
+
+    private void generateYieldPoint(Node node, boolean exprContext) {
+        if (unnestedYields.containsKey(node)) {
+            // Yield was previously moved up via the "nestedYield" code below.
+            if (exprContext) {
+                cfw.addALoad(variableObjectLocal);
+                cfw.addLoadConstant(unnestedYields.get(node));
+                cfw.addALoad(contextLocal);
+                cfw.addALoad(variableObjectLocal);
+                addScriptRuntimeInvoke("getObjectPropNoWarn",
+                        "(Ljava/lang/Object;Ljava/lang/String;Lorg/mozilla/javascript/Context;"
+                                + "Lorg/mozilla/javascript/Scriptable;)Ljava/lang/Object;");
+            }
+            return;
+        }
+
+        final Node nestedYield = findNestedYield(node);
+        if (nestedYield != null) {
+            // There is another "yield" nested below this one. Pull it up,
+            // execute it now, and assign its result to a uniquely-named constant.
+            // This is necessary because the recursive code to generate bytecode can't
+            // handle a yield that uses the result of a nested yield.
+            // Otherwise, expressions like "return yield(yield x)" return the wrong result.
+            generateYieldPoint(nestedYield, true);
+
+            final String nn = "__nested__yield__" + unnestedYieldCount;
+            unnestedYieldCount++;
+            cfw.addALoad(variableObjectLocal);
+            cfw.add(ByteCode.SWAP);
+            cfw.addLoadConstant(nn);
+            cfw.add(ByteCode.SWAP);
+            cfw.addALoad(contextLocal);
+            
+            addScriptRuntimeInvoke("setObjectProp",
+              "(Lorg/mozilla/javascript/Scriptable;Ljava/lang/String;Ljava/lang/Object;"
+              + "Lorg/mozilla/javascript/Context;)Ljava/lang/Object;");
+            cfw.add(ByteCode.POP);
+
+            unnestedYields.put(nestedYield, nn);
+        }
+
+        // Now keep on as normal. When we encounter the nested yield, we will replace it
+        // with a lookup of the constant.
+        generateLocalYieldPoint(node, exprContext);
+    }
+
+
+    private void generateLocalYieldPoint(Node node, boolean exprContext) {
+
+        // save stack state from the top to the bottom
+        final int top = cfw.getStackTop();
         maxStack = maxStack > top ? maxStack : top;
-        if (cfw.getStackTop() != 0) {
+        if (top != 0) {
             generateGetGeneratorStackState();
             for (int i = 0; i < top; i++) {
                 cfw.add(ByteCode.DUP_X1);
@@ -2874,7 +2934,7 @@ class BodyCodegen
         else
             Codegen.pushUndefined(cfw);
 
-        if (yieldStar) {
+        if (node.getType() == Token.YIELD_STAR) {
             // We will replace the result with one that signifies we should have a generator
             cfw.add(ByteCode.NEW, "org/mozilla/javascript/ES6Generator$YieldStarResult");
             cfw.add(ByteCode.DUP_X1);
@@ -2891,15 +2951,17 @@ class BodyCodegen
 
         cfw.add(ByteCode.ARETURN);
 
+        // We get back here after a "next" on the generator object itself
+
         generateCheckForThrowOrClose(getTargetLabel(node),
                 hasLocals, nextState);
 
-        // reconstruct the stack
+        // reconstruct the stack from the bottom to the top
         if (top != 0) {
             generateGetGeneratorStackState();
-            for (int i = 0; i < top; i++) {
+            for (int i = (top - 1); i >= 0; i--) {
                 cfw.add(ByteCode.DUP);
-                cfw.addLoadConstant(top - i - 1);
+                cfw.addLoadConstant(i);
                 cfw.add(ByteCode.AALOAD);
                 cfw.add(ByteCode.SWAP);
             }
@@ -5559,4 +5621,7 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
         public List<Integer> jsrPoints  = new ArrayList<Integer>();
         public int tableLabel = 0;
     }
+    
+    private int unnestedYieldCount = 0;
+    private IdentityHashMap<Node, String> unnestedYields = new IdentityHashMap<>();
 }
